@@ -1,0 +1,10 @@
+models/
+__pycache__/
+*.pyc
+.venv/
+.env
+parking_system.db
+uploads/
+.vscode/
+.idea/
+.DS_Store

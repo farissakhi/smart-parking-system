@@ -1,0 +1,9 @@
+opencv-python
+onnxruntime
+easyocr
+flask
+flask-cors
+flask-socketio
+pyserial
+numpy
+requests

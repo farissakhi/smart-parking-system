@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking - Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #3b82f6;
+            --accent-blue-hover: #2563eb;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-yellow: #eab308;
+            --accent-purple: #a855f7;
+            --border: #334155;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --radius: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3b82f6, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title .badge {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-red);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected { background: var(--accent-green); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ===== LAYOUT ===== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .full-width { grid-column: 1 / -1; }
+
+        /* ===== CARDS ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ===== STATS ROW ===== */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        .stat-card:nth-child(1)::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+        .stat-card:nth-child(2)::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+        .stat-card:nth-child(3)::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+        .stat-card:nth-child(4)::before { background: linear-gradient(90deg, #a855f7, #c084fc); }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 8px 0;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ===== CAPACITY BAR ===== */
+        .capacity-bar-container {
+            margin-top: 8px;
+        }
+
+        .capacity-bar {
+            height: 8px;
+            background: var(--bg-input);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .capacity-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease, background 0.5s ease;
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 500;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-primary:hover { background: var(--accent-blue-hover); }
+        .btn-success { background: var(--accent-green); color: white; }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger { background: var(--accent-red); color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: var(--accent-yellow); color: #1e293b; }
+        .btn-warning:hover { background: #ca8a04; }
+        .btn-sm { padding: 6px 12px; font-size: 0.75rem; }
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .btn-ghost:hover { background: var(--bg-input); color: var(--text-primary); }
+
+        /* ===== GATE BUTTONS ===== */
+        .gate-controls {
+            display: flex;
+            gap: 12px;
+        }
+
+        .gate-btn {
+            flex: 1;
+            padding: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: var(--radius);
+            border: 2px solid transparent;
+        }
+
+        .gate-btn.open-gate {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .gate-btn.open-gate:hover { background: rgba(34, 197, 94, 0.2); }
+
+        .gate-btn.close-gate {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .gate-btn.close-gate:hover { background: rgba(239, 68, 68, 0.2); }
+
+        /* ===== FORM ===== */
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .form-group label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select {
+            padding: 10px 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        input::placeholder { color: var(--text-muted); }
+
+        /* ===== TABLE ===== */
+        .table-container {
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+        }
+
+        td {
+            padding: 12px 14px;
+            font-size: 0.85rem;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        tr:hover td { background: rgba(59, 130, 246, 0.05); }
+
+        .plate-badge {
+            background: var(--bg-input);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-allowed {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+        }
+
+        .status-denied {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        .status-active {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+        }
+
+        .status-blocked {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        /* ===== LIVE FEED ===== */
+        .live-event {
+            padding: 12px 16px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideIn 0.3s ease;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .live-event.allowed { border-left-color: var(--accent-green); }
+        .live-event.denied { border-left-color: var(--accent-red); }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .live-feed-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .event-plate {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .event-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        /* ===== NOTIFICATION TOAST ===== */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 20px;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow);
+            animation: toastIn 0.4s ease;
+            max-width: 350px;
+        }
+
+        .toast.success { border-left: 4px solid var(--accent-green); }
+        .toast.error { border-left: 4px solid var(--accent-red); }
+        .toast.info { border-left: 4px solid var(--accent-blue); }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(50px); }
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .form-row { flex-direction: column; }
+            .header { flex-direction: column; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header-title">
+            <h1>🅿️ Smart Parking System</h1>
+            <span class="badge">Admin Dashboard</span>
+        </div>
+        <div class="connection-status">
+            <div class="status-dot" id="wsStatus"></div>
+            <span id="wsLabel">Connecting...</span>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container">
+        <!-- STATS ROW -->
+        <div class="stats-row full-width">
+            <div class="stat-card">
+                <div class="stat-label">Total Slots</div>
+                <div class="stat-value" id="totalSlots">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Occupied</div>
+                <div class="stat-value" id="occupiedSlots">--</div>
+                <div class="capacity-bar-container">
+                    <div class="capacity-bar">
+                        <div class="capacity-fill" id="capacityFill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Available</div>
+                <div class="stat-value" id="availableSlots">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Registered Vehicles</div>
+                <div class="stat-value" id="totalVehicles">--</div>
+            </div>
+        </div>
+
+        <!-- GATE CONTROL -->
+        <div class="card">
+            <div class="card-header">
+                <h2>🚧 Gate Control</h2>
+            </div>
+            <div class="gate-controls">
+                <button class="btn gate-btn open-gate" onclick="controlGate('open')">▲ OPEN GATE</button>
+                <button class="btn gate-btn close-gate" onclick="controlGate('close')">▼ CLOSE GATE</button>
+            </div>
+            <div style="margin-top: 16px;">
+                <div class="card-header" style="margin-bottom: 12px;">
+                    <h2 style="font-size: 0.9rem;">⚙️ Capacity Settings</h2>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Total Slots</label>
+                        <input type="number" id="inputTotalSlots" placeholder="20" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Occupied</label>
+                        <input type="number" id="inputOccupied" placeholder="0" min="0">
+                    </div>
+                    <div class="form-group" style="justify-content: flex-end;">
+                        <button class="btn btn-primary" onclick="updateCapacity()">Update</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIVE FEED -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📡 Live Detection Feed</h2>
+                <span class="status-dot connected" style="display:inline-block"></span>
+            </div>
+            <div class="live-feed-list" id="liveFeed">
+                <div class="empty-state">Waiting for plate detections...</div>
+            </div>
+        </div>
+
+        <!-- REGISTER VEHICLE -->
+        <div class="card full-width">
+            <div class="card-header">
+                <h2>🚗 Register Vehicle</h2>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:2">
+                    <label>Plate Number</label>
+                    <input type="text" id="regPlate" placeholder="e.g. B1234XYZ" style="text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                    <label>Vehicle Type</label>
+                    <select id="regType">
+                        <option value="Car">Car</option>
+                        <option value="Motorcycle">Motorcycle</option>
+                        <option value="Truck">Truck</option>
+                    </select>
+                </div>
+                <div class="form-group" style="justify-content: flex-end;">
+                    <button class="btn btn-success" onclick="registerVehicle()">+ Register</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VEHICLES TABLE -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📋 Registered Vehicles</h2>
+                <button class="btn btn-ghost btn-sm" onclick="loadVehicles()">↻ Refresh</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Plate</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vehiclesTable">
+                        <tr><td colspan="4" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACCESS LOGS -->
+        <div class="card">
+            <div class="card-header">
+                <h2>📜 Access Logs</h2>
+                <button class="btn btn-ghost btn-sm" onclick="loadLogs()">↻ Refresh</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Plate</th>
+                            <th>Action</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable">
+                        <tr><td colspan="4" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== CONFIG =====
+        const API = '';
+        const socket = io();
+
+        // ===== TOAST NOTIFICATIONS =====
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'toastOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ===== SOCKET.IO =====
+        socket.on('connect', () => {
+            document.getElementById('wsStatus').classList.add('connected');
+            document.getElementById('wsLabel').textContent = 'Connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('wsStatus').classList.remove('connected');
+            document.getElementById('wsLabel').textContent = 'Disconnected';
+        });
+
+        socket.on('capacity_update', (data) => {
+            updateCapacityUI(data);
+        });
+
+        socket.on('plate_detected', (data) => {
+            addLiveEvent(data);
+            loadLogs();
+            showToast(`Plate <b>${data.plate}</b> — ${data.status}`, data.status === 'ALLOWED' ? 'success' : 'error');
+        });
+
+        socket.on('vehicle_update', (data) => {
+            loadVehicles();
+        });
+
+        socket.on('gate_command', (data) => {
+            showToast(`Gate command: <b>${data.action}</b>`, 'info');
+        });
+
+        // ===== CAPACITY =====
+        function updateCapacityUI(data) {
+            const total = data.total_slots || 0;
+            const occupied = data.occupied_slots || 0;
+            const available = total - occupied;
+            const percent = total > 0 ? (occupied / total) * 100 : 0;
+
+            document.getElementById('totalSlots').textContent = total;
+            document.getElementById('occupiedSlots').textContent = occupied;
+            document.getElementById('availableSlots').textContent = available;
+
+            const fill = document.getElementById('capacityFill');
+            fill.style.width = percent + '%';
+
+            if (percent < 50) fill.style.background = 'linear-gradient(90deg, #22c55e, #4ade80)';
+            else if (percent < 80) fill.style.background = 'linear-gradient(90deg, #eab308, #facc15)';
+            else fill.style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
+        }
+
+        async function loadCapacity() {
+            try {
+                const res = await fetch(API + '/api/capacity');
+                const data = await res.json();
+                updateCapacityUI(data);
+            } catch(e) { console.error('Failed to load capacity', e); }
+        }
+
+        async function updateCapacity() {
+            const total = document.getElementById('inputTotalSlots').value;
+            const occupied = document.getElementById('inputOccupied').value;
+            const body = {};
+            if (total) body.total_slots = parseInt(total);
+            if (occupied !== '') body.occupied_slots = parseInt(occupied);
+
+            try {
+                const res = await fetch(API + '/api/capacity', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast('Capacity updated', 'success');
+                    document.getElementById('inputTotalSlots').value = '';
+                    document.getElementById('inputOccupied').value = '';
+                }
+            } catch(e) { showToast('Failed to update capacity', 'error'); }
+        }
+
+        // ===== VEHICLES =====
+        async function loadVehicles() {
+            try {
+                const res = await fetch(API + '/api/vehicles');
+                const vehicles = await res.json();
+                const tbody = document.getElementById('vehiclesTable');
+                document.getElementById('totalVehicles').textContent = vehicles.length;
+
+                if (vehicles.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No vehicles registered</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = vehicles.map(v => `
+                    <tr>
+                        <td><span class="plate-badge">${v.plate_number}</span></td>
+                        <td>${v.vehicle_type || 'Car'}</td>
+                        <td>
+                            <span class="status-badge ${v.is_active ? 'status-active' : 'status-blocked'}">
+                                ${v.is_active ? 'Active' : 'Blocked'}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-warning btn-sm" onclick="toggleVehicle(${v.id})">
+                                ${v.is_active ? 'Block' : 'Unblock'}
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteVehicle(${v.id}, '${v.plate_number}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.error('Failed to load vehicles', e); }
+        }
+
+        async function registerVehicle() {
+            const plate = document.getElementById('regPlate').value.trim().toUpperCase();
+            const type = document.getElementById('regType').value;
+            if (!plate) { showToast('Please enter a plate number', 'error'); return; }
+
+            try {
+                const res = await fetch(API + '/api/vehicles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plate_number: plate, vehicle_type: type })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast(`Vehicle <b>${plate}</b> registered!`, 'success');
+                    document.getElementById('regPlate').value = '';
+                    loadVehicles();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch(e) { showToast('Failed to register vehicle', 'error'); }
+        }
+
+        async function toggleVehicle(id) {
+            try {
+                const res = await fetch(API + `/api/vehicles/${id}/toggle`, { method: 'POST' });
+                const data = await res.json();
+                showToast(data.message, 'success');
+                loadVehicles();
+            } catch(e) { showToast('Failed to toggle vehicle', 'error'); }
+        }
+
+        async function deleteVehicle(id, plate) {
+            if (!confirm(`Delete vehicle ${plate}?`)) return;
+            try {
+                const res = await fetch(API + `/api/vehicles/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                showToast(data.message, 'success');
+                loadVehicles();
+            } catch(e) { showToast('Failed to delete vehicle', 'error'); }
+        }
+
+        // ===== GATE CONTROL =====
+        async function controlGate(action) {
+            try {
+                const res = await fetch(API + `/api/gate/${action}`, { method: 'POST' });
+                const data = await res.json();
+                showToast(data.message, 'success');
+            } catch(e) { showToast('Failed to control gate', 'error'); }
+        }
+
+        // ===== ACCESS LOGS =====
+        async function loadLogs() {
+            try {
+                const res = await fetch(API + '/api/logs');
+                const logs = await res.json();
+                const tbody = document.getElementById('logsTable');
+
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No logs yet</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = logs.map(l => `
+                    <tr>
+                        <td><span class="plate-badge">${l.plate_number}</span></td>
+                        <td>${l.action}</td>
+                        <td>
+                            <span class="status-badge ${l.status === 'ALLOWED' ? 'status-allowed' : 'status-denied'}">
+                                ${l.status}
+                            </span>
+                        </td>
+                        <td style="font-size:0.8rem; color:var(--text-muted)">${l.timestamp}</td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.error('Failed to load logs', e); }
+        }
+
+        // ===== LIVE FEED =====
+        let liveEvents = [];
+        function addLiveEvent(data) {
+            const feedDiv = document.getElementById('liveFeed');
+            liveEvents.unshift(data);
+            if (liveEvents.length > 20) liveEvents.pop();
+
+            feedDiv.innerHTML = liveEvents.map(e => `
+                <div class="live-event ${e.status.toLowerCase()}">
+                    <div>
+                        <div class="event-plate">${e.plate}</div>
+                        <div style="font-size:0.8rem; color:var(--text-secondary)">${e.message}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <span class="status-badge ${e.status === 'ALLOWED' ? 'status-allowed' : 'status-denied'}">${e.status}</span>
+                        <div class="event-time">${e.timestamp || 'just now'}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ===== INIT =====
+        window.addEventListener('load', () => {
+            loadCapacity();
+            loadVehicles();
+            loadLogs();
+        });
+
+        // Enter key to register
+        document.getElementById('regPlate').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') registerVehicle();
+        });
+    </script>
+</body>
+</html>
