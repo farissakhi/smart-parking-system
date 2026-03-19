@@ -18,13 +18,15 @@ class SerialComm:
             print(f"WARNING: Could not connect to ESP32 on {self.port}: {e}")
             self.ser = None
 
-    def send_command(self, cmd, plate="UNKNOWN", status="denied"):
+    def send_command(self, cmd, plate="UNKNOWN", status="denied", **extra):
         if self.ser and self.ser.is_open:
             data = {
                 "cmd": cmd,
                 "plate": plate,
                 "status": status
             }
+            if extra:
+                data.update(extra)
             json_cmd = json.dumps(data) + "\n"
             self.ser.write(json_cmd.encode())
             print(f"Sent to ESP32: {json_cmd.strip()}")

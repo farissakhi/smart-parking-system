@@ -4,7 +4,7 @@ import onnxruntime as ort
 import os
 
 class PlateDetector:
-    def __init__(self, model_path='models/plate_model.onnx', conf_threshold=0.5):
+    def __init__(self, model_path='models/best_plate.onnx', conf_threshold=0.5):
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         

@@ -21,9 +21,23 @@ def detection_worker(detector, ocr, comm, frame_holder):
     gate_open_time = 0
     is_gate_open = False
     last_detection_time = 0
+    buzzer_off_time = 0
+    is_buzzer_on = False
+
+    def trigger_buzzer(current_time):
+        nonlocal is_buzzer_on, buzzer_off_time
+        if not getattr(config, 'BUZZER_ENABLED', False):
+            return
+        comm.send_command("BUZZER_ON")
+        is_buzzer_on = True
+        buzzer_off_time = current_time + float(getattr(config, 'BUZZER_BEEP_DURATION', 0.35))
 
     while frame_holder['running']:
         current_time = time.time()
+
+        if is_buzzer_on and current_time >= buzzer_off_time:
+            comm.send_command("BUZZER_OFF")
+            is_buzzer_on = False
 
         # Auto close gate
         if is_gate_open and (current_time - gate_open_time > config.AUTO_CLOSE_DELAY):
@@ -70,10 +84,14 @@ def detection_worker(detector, ocr, comm, frame_holder):
 
                         if status == 'ALLOWED':
                             comm.send_command("OPEN_GATE", plate_text, "allowed")
+                            if getattr(config, 'BUZZER_ON_ALLOWED', False):
+                                trigger_buzzer(current_time)
                             is_gate_open = True
                             gate_open_time = current_time
                         else:
                             comm.send_command("DENY_GATE", plate_text, "denied")
+                            if getattr(config, 'BUZZER_ON_DENIED', True):
+                                trigger_buzzer(current_time)
 
                     except Exception as e:
                         print(f"API Error: {e}")
@@ -84,7 +102,20 @@ def detection_worker(detector, ocr, comm, frame_holder):
 
 def main():
     detector = PlateDetector(config.MODEL_PATH, config.CONF_THRESHOLD)
-    ocr = PlateOCR()
+
+    # OCR debug can be enabled by uncommenting one line in config.py (OCR_DEBUG_PROFILE)
+    ocr_debug_profile = getattr(config, 'OCR_DEBUG_PROFILE', {})
+
+    ocr = PlateOCR(
+        model_path=config.OCR_MODEL_PATH,
+        conf_threshold=config.OCR_CONF_THRESHOLD,
+        charset=config.OCR_CHARSET,
+        crop_pad_ratio=config.OCR_CROP_PAD_RATIO,
+        use_nms=config.OCR_USE_NMS,
+        nms_iou_threshold=config.OCR_NMS_IOU_THRESHOLD,
+        second_pass_enhance=config.OCR_SECOND_PASS_ENHANCE,
+        **ocr_debug_profile,
+    )
     comm = SerialComm(config.SERIAL_PORT, config.BAUD_RATE)
 
     cap = cv2.VideoCapture(config.CAMERA_INDEX)

@@ -24,7 +24,7 @@ Sistem manajemen parkir otomatis yang menggunakan teknologi **Optical Character 
 
 2. **Optical Character Recognition (OCR)**
    - Ekstraksi teks dari plat nomor yang terdeteksi
-   - Menggunakan EasyOCR untuk akurasi maksimal
+   - Menggunakan model OCR ONNX untuk akurasi maksimal
    - Validasi minimal 5 karakter untuk hasil yang valid
 
 3. **Sistem Kontrol Pintu Otomatis**
@@ -58,8 +58,7 @@ Sistem manajemen parkir otomatis yang menggunakan teknologi **Optical Character 
 - **Flask-CORS** - Cross-Origin Resource Sharing
 - **Flask-SocketIO** - WebSocket real-time communication
 - **OpenCV (cv2)** - Computer vision dan image processing
-- **EasyOCR** - Optical Character Recognition
-- **ONNX Runtime** - Model inference untuk deteksi plat
+- **ONNX Runtime** - Model inference untuk deteksi plat dan OCR
 
 ### Hardware Communication
 - **PySerial** - Komunikasi serial dengan Arduino/microcontroller

@@ -8,7 +8,7 @@ Dokumentasi ini ditujukan untuk pengembang yang ingin memahami lebih dalam tenta
 *   **`backend.py`**: Entry point utama untuk Flask server. Mengatur API endpoints dan komunikasi SocketIO dengan Frontend.
 *   **`main.py`**: Script utama yang menjalankan deteksi kamera. Menghubungkan kamera, detektor plat, dan komunikasi serial.
 *   **`detection.py`**: Menggunakan ONNX Runtime untuk menjalankan model YOLO. Outputnya adalah koordinat kotak (bounding box) plat nomor.
-*   **`ocr.py`**: Mengolah gambar plat nomor menjadi teks menggunakan Tesseract/EasyOCR.
+*   **`ocr.py`**: Mengolah gambar plat nomor menjadi teks menggunakan model OCR ONNX (onnxruntime).
 
 ### Utilities & Config
 *   **`config.py`**: Tempat mengatur variabel global seperti path database, resolusi kamera, dan confidence threshold.
@@ -30,4 +30,4 @@ Dokumentasi ini ditujukan untuk pengembang yang ingin memahami lebih dalam tenta
 
 ## 💡 Troubleshooting
 *   **Kamera tidak terbuka**: Pastikan tidak ada aplikasi lain (seperti Zoom/Teams) yang sedang menggunakan webcam. Ubah index kamera di `config.py` jika perlu.
-*   **Error OCR**: Pastikan Tesseract sudah terdaftar di environment PATH sistem Anda.
+*   **Error OCR**: Pastikan file model OCR ONNX tersedia di folder `models/` dan path-nya benar di `config.py`.
