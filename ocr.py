@@ -186,14 +186,23 @@ class PlateOCR:
     def _save_debug_images(self, original_crop, resized_rgb, debug_overlay):
         if not self.debug:
             return
-        base_name = f"ocr_{self.debug_counter:06d}"
-        crop_path = os.path.join(self.debug_save_dir, f"{base_name}_crop.jpg")
-        resized_path = os.path.join(self.debug_save_dir, f"{base_name}_resized.jpg")
-        overlay_path = os.path.join(self.debug_save_dir, f"{base_name}_overlay.jpg")
+        try:
+            # Ensure debug directory exists with proper permissions
+            os.makedirs(self.debug_save_dir, exist_ok=True, mode=0o777)
+            
+            base_name = f"ocr_{self.debug_counter:06d}"
+            crop_path = os.path.join(self.debug_save_dir, f"{base_name}_crop.jpg")
+            resized_path = os.path.join(self.debug_save_dir, f"{base_name}_resized.jpg")
+            overlay_path = os.path.join(self.debug_save_dir, f"{base_name}_overlay.jpg")
 
-        cv2.imwrite(crop_path, original_crop)
-        cv2.imwrite(resized_path, cv2.cvtColor(resized_rgb, cv2.COLOR_RGB2BGR))
-        cv2.imwrite(overlay_path, debug_overlay)
+            cv2.imwrite(crop_path, original_crop)
+            cv2.imwrite(resized_path, cv2.cvtColor(resized_rgb, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(overlay_path, debug_overlay)
+        except PermissionError as e:
+            print(f"WARNING: Failed to save debug images due to permission error: {e}")
+            print(f"Ensure {self.debug_save_dir} directory has write permissions")
+        except Exception as e:
+            print(f"WARNING: Failed to save debug images: {e}")
 
     def _show_debug_windows(self, original_crop, debug_overlay):
         if not self.debug_show_window:

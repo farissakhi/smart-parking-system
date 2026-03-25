@@ -6,7 +6,7 @@ import os
 CAMERA_INDEX = 0  # 0 for default webcam, or RTSP URL for IP Camera
 
 # Serial Settings (Arduino/ESP32)
-SERIAL_PORT = 'COM7'  # Windows: 'COM3', Linux: '/dev/ttyUSB0'
+SERIAL_PORT = 'COM10'  # Windows: 'COM3', Linux: '/dev/ttyUSB0'
 BAUD_RATE = 115200
 
 # Detection Settings
@@ -32,9 +32,17 @@ BACKEND_URL = 'http://localhost:5000/api/check-plate'
 
 # Gate Settings
 AUTO_CLOSE_DELAY = 5.0  # Seconds the gate stays open
+GATE_CLOSE_REQUIRE_CLEAR_OBJECT = True
+GATE_CLOSE_CLEAR_HOLD_S = 2
+
+# Ultrasonic-based detection gate
+ULTRASONIC_GATE_ENABLED = True
+ULTRASONIC_TRIGGER_DISTANCE_CM = 35.0
+ULTRASONIC_SENSOR_MAX_AGE_S = 3.0
+ULTRASONIC_FAIL_OPEN = False  # If True, gate will open if sensor data is unavailable (fail-safe mode)
 
 # Buzzer Settings
 BUZZER_ENABLED = True
-BUZZER_ON_DENIED = True
+BUZZER_ON_DENIED = False
 BUZZER_ON_ALLOWED = False
 BUZZER_BEEP_DURATION = 0.35  # Seconds

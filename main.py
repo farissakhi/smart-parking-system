@@ -20,6 +20,7 @@ def detection_worker(detector, ocr, comm, frame_holder):
     """Background thread: runs detection + OCR + API without blocking camera."""
     gate_open_time = 0
     is_gate_open = False
+    clear_since_time = None
     last_detection_time = 0
     buzzer_off_time = 0
     is_buzzer_on = False
@@ -34,20 +35,38 @@ def detection_worker(detector, ocr, comm, frame_holder):
 
     while frame_holder['running']:
         current_time = time.time()
+        comm.update_incoming()
 
         if is_buzzer_on and current_time >= buzzer_off_time:
             comm.send_command("BUZZER_OFF")
             is_buzzer_on = False
 
-        # Auto close gate
+        # Auto close gate (only close when area is clear if ultrasonic gate is enabled)
         if is_gate_open and (current_time - gate_open_time > config.AUTO_CLOSE_DELAY):
-            print("Auto closing gate...")
-            comm.send_command("CLOSE_GATE")
-            is_gate_open = False
-            with lock:
-                latest_result['status'] = 'SCANNING'
-                latest_result['plate'] = None
-                latest_result['box'] = None
+            should_close = True
+
+            if getattr(config, 'ULTRASONIC_GATE_ENABLED', False) and getattr(config, 'GATE_CLOSE_REQUIRE_CLEAR_OBJECT', True):
+                has_fresh_sensor = comm.has_fresh_sensor(getattr(config, 'ULTRASONIC_SENSOR_MAX_AGE_S', 2.0))
+                object_present = comm.is_object_present(getattr(config, 'ULTRASONIC_TRIGGER_DISTANCE_CM', 35.0))
+
+                if has_fresh_sensor and object_present is False:
+                    if clear_since_time is None:
+                        clear_since_time = current_time
+                    clear_duration = current_time - clear_since_time
+                    should_close = clear_duration >= float(getattr(config, 'GATE_CLOSE_CLEAR_HOLD_S', 0.5))
+                else:
+                    clear_since_time = None
+                    should_close = False
+
+            if should_close:
+                print("Auto closing gate...")
+                comm.send_command("CLOSE_GATE")
+                is_gate_open = False
+                clear_since_time = None
+                with lock:
+                    latest_result['status'] = 'SCANNING'
+                    latest_result['plate'] = None
+                    latest_result['box'] = None
 
         # Skip detection if gate is open or not enough delay
         if is_gate_open or (current_time - last_detection_time < config.DETECT_DELAY):
@@ -58,6 +77,19 @@ def detection_worker(detector, ocr, comm, frame_holder):
         if frame is None:
             time.sleep(0.01)
             continue
+
+        if getattr(config, 'ULTRASONIC_GATE_ENABLED', False):
+            has_fresh_sensor = comm.has_fresh_sensor(getattr(config, 'ULTRASONIC_SENSOR_MAX_AGE_S', 2.0))
+            object_present = comm.is_object_present(getattr(config, 'ULTRASONIC_TRIGGER_DISTANCE_CM', 35.0))
+            fail_open = bool(getattr(config, 'ULTRASONIC_FAIL_OPEN', True))
+
+            if has_fresh_sensor and object_present is False:
+                time.sleep(0.01)
+                continue
+
+            if (not has_fresh_sensor) and (not fail_open):
+                time.sleep(0.01)
+                continue
 
         frame_copy = frame.copy()
         results = detector.detect(frame_copy)
@@ -88,6 +120,7 @@ def detection_worker(detector, ocr, comm, frame_holder):
                                 trigger_buzzer(current_time)
                             is_gate_open = True
                             gate_open_time = current_time
+                            clear_since_time = None
                         else:
                             comm.send_command("DENY_GATE", plate_text, "denied")
                             if getattr(config, 'BUZZER_ON_DENIED', True):
