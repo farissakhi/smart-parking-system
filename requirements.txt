@@ -6,3 +6,5 @@ flask-socketio
 pyserial
 numpy
 requests
+python-socketio[client]
+websocket-client

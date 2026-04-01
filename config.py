@@ -6,7 +6,7 @@ import os
 CAMERA_INDEX = 0  # 0 for default webcam, or RTSP URL for IP Camera
 
 # Serial Settings (Arduino/ESP32)
-SERIAL_PORT = 'COM10'  # Windows: 'COM3', Linux: '/dev/ttyUSB0'
+SERIAL_PORT = 'COM4'  # Windows: 'COM3', Linux: '/dev/ttyUSB0'
 BAUD_RATE = 115200
 
 # Detection Settings
@@ -29,6 +29,11 @@ OCR_DEBUG_PROFILE = {}
 
 # API Settings
 BACKEND_URL = 'http://localhost:5000/api/check-plate'
+SOCKET_SERVER_URL = 'http://localhost:5000'
+INCREMENT_URL = 'http://localhost:5000/api/occupancy/increment'
+DECREMENT_URL = 'http://localhost:5000/api/occupancy/decrement'
+CONFIRM_URL = 'http://localhost:5000/api/occupancy/confirm-passage'
+STATS_URL = 'http://localhost:5000/api/logs/stats'
 
 # Gate Settings
 AUTO_CLOSE_DELAY = 5.0  # Seconds the gate stays open
@@ -43,6 +48,6 @@ ULTRASONIC_FAIL_OPEN = False  # If True, gate will open if sensor data is unavai
 
 # Buzzer Settings
 BUZZER_ENABLED = True
-BUZZER_ON_DENIED = False
-BUZZER_ON_ALLOWED = False
-BUZZER_BEEP_DURATION = 0.35  # Seconds
+BUZZER_ON_DENIED = True
+BUZZER_ON_ALLOWED = True
+BUZZER_BEEP_DURATION = 1.5  # Seconds

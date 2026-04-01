@@ -48,6 +48,16 @@ def init_db():
         conn.close()
         print("Database initialized successfully.")
 
+    # Migration: Add is_inside to vehicles if missing
+    conn = get_db()
+    try:
+        conn.execute('SELECT is_inside FROM vehicles LIMIT 1')
+    except sqlite3.OperationalError:
+        print("Migrating: Adding is_inside column to vehicles...")
+        conn.execute('ALTER TABLE vehicles ADD COLUMN is_inside INTEGER DEFAULT 0')
+        conn.commit()
+    conn.close()
+
 def get_capacity():
     conn = get_db()
     cap = conn.execute('SELECT * FROM parking_capacity LIMIT 1').fetchone()
@@ -171,11 +181,12 @@ def check_plate():
     capacity = conn.execute('SELECT * FROM parking_capacity LIMIT 1').fetchone()
     is_full = capacity and capacity['occupied_slots'] >= capacity['total_slots']
 
+    action = 'ENTRY' # Default
+
     if vehicle and not is_full:
+        action = 'EXIT' if vehicle['is_inside'] else 'ENTRY'
         status = 'ALLOWED'
-        message = f"Access Granted: {plate_number}"
-        # Increment occupied slots
-        conn.execute('UPDATE parking_capacity SET occupied_slots = occupied_slots + 1')
+        message = f"{action} Granted: {plate_number}"
     elif vehicle and is_full:
         status = 'DENIED'
         message = 'Parking Full'
@@ -185,7 +196,7 @@ def check_plate():
 
     # Log the access attempt
     conn.execute('INSERT INTO access_logs (plate_number, action, status) VALUES (?, ?, ?)',
-                 (plate_number, 'ENTRY', status))
+                 (plate_number, action, status))
     conn.commit()
 
     # Get updated capacity
@@ -195,7 +206,8 @@ def check_plate():
     result = {
         'status': status,
         'message': message,
-        'plate': plate_number
+        'plate': plate_number,
+        'action': action
     }
 
     # Real-time push to all connected dashboards
@@ -203,7 +215,6 @@ def check_plate():
         **result,
         'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
-    socketio.emit('capacity_update', dict(cap))
 
     return jsonify(result)
 
@@ -218,9 +229,76 @@ def list_logs():
     conn.close()
     return jsonify([dict(l) for l in logs])
 
+@app.route('/api/logs/stats', methods=['GET'])
+def get_log_stats():
+    conn = get_db()
+    stats = conn.execute('''
+        SELECT strftime('%H', timestamp) as hour, COUNT(*) as count 
+        FROM access_logs 
+        WHERE status = 'ALLOWED' 
+        GROUP BY hour 
+        ORDER BY hour
+    ''').fetchall()
+    conn.close()
+    return jsonify([dict(s) for s in stats])
+
 # ============================================================
 # Parking Capacity
 # ============================================================
+
+@app.route('/api/occupancy/increment', methods=['POST'])
+def increment_occupancy():
+    conn = get_db()
+    conn.execute('UPDATE parking_capacity SET occupied_slots = occupied_slots + 1 WHERE id = 1')
+    conn.commit()
+    cap = conn.execute('SELECT * FROM parking_capacity LIMIT 1').fetchone()
+    conn.close()
+    socketio.emit('capacity_update', dict(cap))
+    return jsonify({'status': 'success', **dict(cap)})
+
+@app.route('/api/occupancy/decrement', methods=['POST'])
+def decrement_occupancy():
+    conn = get_db()
+    conn.execute('UPDATE parking_capacity SET occupied_slots = CASE WHEN occupied_slots > 0 THEN occupied_slots - 1 ELSE 0 END WHERE id = 1')
+    conn.commit()
+    cap = conn.execute('SELECT * FROM parking_capacity LIMIT 1').fetchone()
+    conn.close()
+    socketio.emit('capacity_update', dict(cap))
+    return jsonify({'status': 'success', **dict(cap)})
+
+@app.route('/api/occupancy/confirm-passage', methods=['POST'])
+def confirm_passage():
+    data = request.json
+    plate = data.get('plate_number')
+    if not plate:
+        return jsonify({'status': 'error', 'message': 'Missing plate'}), 400
+        
+    conn = get_db()
+    vehicle = conn.execute('SELECT * FROM vehicles WHERE plate_number = ?', (plate,)).fetchone()
+    if not vehicle:
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'Vehicle not found'}), 404
+        
+    # Toggle logic
+    is_entering = not vehicle['is_inside']
+    new_status = 1 if is_entering else 0
+    action = 'ENTRY' if is_entering else 'EXIT'
+    
+    conn.execute('UPDATE vehicles SET is_inside = ? WHERE plate_number = ?', (new_status, plate))
+    
+    if is_entering:
+        conn.execute('UPDATE parking_capacity SET occupied_slots = occupied_slots + 1 WHERE id = 1')
+    else:
+        conn.execute('UPDATE parking_capacity SET occupied_slots = CASE WHEN occupied_slots > 0 THEN occupied_slots - 1 ELSE 0 END WHERE id = 1')
+        
+    conn.commit()
+    cap = conn.execute('SELECT * FROM parking_capacity LIMIT 1').fetchone()
+    conn.close()
+    
+    socketio.emit('capacity_update', dict(cap))
+    socketio.emit('vehicle_update', {'action': 'status_change', 'plate': plate, 'is_inside': new_status})
+    
+    return jsonify({'status': 'success', 'action': action, 'is_inside': new_status, **dict(cap)})
 
 @app.route('/api/capacity', methods=['GET'])
 def get_parking_capacity():

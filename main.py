@@ -3,6 +3,7 @@ import time
 import requests
 import threading
 import config
+import socketio
 from detection import PlateDetector
 from ocr import PlateOCR
 from serial_comm import SerialComm
@@ -24,14 +25,17 @@ def detection_worker(detector, ocr, comm, frame_holder):
     last_detection_time = 0
     buzzer_off_time = 0
     is_buzzer_on = False
+    waiting_for_passage = None # Stores the plate currently passing
 
-    def trigger_buzzer(current_time):
+    def trigger_buzzer(current_time, plate="UNKNOWN", status="denied"):
         nonlocal is_buzzer_on, buzzer_off_time
-        if not getattr(config, 'BUZZER_ENABLED', False):
+        if not config.BUZZER_ENABLED:
             return
+        # Go back to a simple command to match working test_buzzer.py
         comm.send_command("BUZZER_ON")
         is_buzzer_on = True
-        buzzer_off_time = current_time + float(getattr(config, 'BUZZER_BEEP_DURATION', 0.35))
+        # Use fresh time to avoid race condition with slow OCR processing
+        buzzer_off_time = time.time() + float(config.BUZZER_BEEP_DURATION)
 
     while frame_holder['running']:
         current_time = time.time()
@@ -53,6 +57,16 @@ def detection_worker(detector, ocr, comm, frame_holder):
                     if clear_since_time is None:
                         clear_since_time = current_time
                     clear_duration = current_time - clear_since_time
+                    
+                    # Verify passage (toggle status) if not already done
+                    if waiting_for_passage and clear_duration >= 0.5:
+                        try:
+                            requests.post(config.CONFIRM_URL, json={'plate_number': waiting_for_passage}, timeout=1)
+                            print(f"Passage confirmed for {waiting_for_passage}. Status toggled.")
+                            waiting_for_passage = None
+                        except Exception as e:
+                            print(f"Failed to confirm passage: {e}")
+
                     should_close = clear_duration >= float(getattr(config, 'GATE_CLOSE_CLEAR_HOLD_S', 0.5))
                 else:
                     clear_since_time = None
@@ -116,21 +130,51 @@ def detection_worker(detector, ocr, comm, frame_holder):
 
                         if status == 'ALLOWED':
                             comm.send_command("OPEN_GATE", plate_text, "allowed")
-                            if getattr(config, 'BUZZER_ON_ALLOWED', False):
-                                trigger_buzzer(current_time)
+                            if config.BUZZER_ON_ALLOWED:
+                                trigger_buzzer(current_time, plate=plate_text, status="allowed")
                             is_gate_open = True
+                            waiting_for_passage = plate_text
                             gate_open_time = current_time
                             clear_since_time = None
                         else:
                             comm.send_command("DENY_GATE", plate_text, "denied")
-                            if getattr(config, 'BUZZER_ON_DENIED', True):
-                                trigger_buzzer(current_time)
+                            if config.BUZZER_ON_DENIED:
+                                trigger_buzzer(current_time, plate=plate_text, status="denied")
 
                     except Exception as e:
                         print(f"API Error: {e}")
                     break  # Process only the first valid plate per cycle
 
         time.sleep(0.01)
+
+
+def setup_socket(comm):
+    """Initialize Socket.IO client to listen for manual gate commands."""
+    sio = socketio.Client()
+
+    @sio.on('gate_command')
+    def on_gate_command(data):
+        action = data.get('action')
+        print(f"Manual Gate Command received: {action}")
+        if action == 'OPEN':
+            comm.send_command("OPEN_GATE", "MANUAL", "allowed")
+        elif action == 'CLOSE':
+            comm.send_command("CLOSE_GATE", "MANUAL", "denied")
+
+    @sio.event
+    def connect():
+        print("Connected to Backend Socket Server")
+
+    @sio.event
+    def disconnect():
+        print("Disconnected from Backend Socket Server")
+
+    try:
+        sio.connect(config.SOCKET_SERVER_URL)
+        return sio
+    except Exception as e:
+        print(f"Warning: Could not connect to Socket server: {e}")
+        return None
 
 
 def main():
@@ -151,6 +195,9 @@ def main():
     )
     comm = SerialComm(config.SERIAL_PORT, config.BAUD_RATE)
 
+    # Setup Socket.IO for manual controls
+    sio = setup_socket(comm)
+
     cap = cv2.VideoCapture(config.CAMERA_INDEX)
 
     frame_holder = {'frame': None, 'running': True}
@@ -160,6 +207,7 @@ def main():
     worker.start()
 
     print("Starting Smart Parking System...")
+    print(f"Buzzer Config: ENABLED={config.BUZZER_ENABLED}, ALLOWED={config.BUZZER_ON_ALLOWED}, DENIED={config.BUZZER_ON_DENIED}")
     print("Press 'q' to quit.")
 
     while True:
@@ -194,6 +242,8 @@ def main():
             break
 
     frame_holder['running'] = False
+    if sio and sio.connected:
+        sio.disconnect()
     cap.release()
     cv2.destroyAllWindows()
     comm.close()
