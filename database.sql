@@ -26,3 +26,12 @@ CREATE TABLE IF NOT EXISTS parking_capacity (
 
 -- Insert default capacity
 INSERT INTO parking_capacity (total_slots, occupied_slots) VALUES (20, 0);
+
+-- AUTHENTICATION TABLE
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    full_name TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

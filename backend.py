@@ -4,6 +4,10 @@ from flask_socketio import SocketIO, emit
 import sqlite3
 import datetime
 import os
+import jwt
+import time
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 CORS(app)
@@ -12,6 +16,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 DB_PATH = 'parking_system.db'
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+SECRET_KEY = os.environ.get('SECRET_KEY', 'smart-parking-secret-2024')
 
 # ============================================================
 # Database Helpers
@@ -48,15 +54,61 @@ def init_db():
         conn.close()
         print("Database initialized successfully.")
 
-    # Migration: Add is_inside to vehicles if missing
+    # Migration: Add users table if missing
     conn = get_db()
     try:
-        conn.execute('SELECT is_inside FROM vehicles LIMIT 1')
+        conn.execute('SELECT * FROM users LIMIT 1')
     except sqlite3.OperationalError:
-        print("Migrating: Adding is_inside column to vehicles...")
-        conn.execute('ALTER TABLE vehicles ADD COLUMN is_inside INTEGER DEFAULT 0')
+        print("Migrating: Creating users table...")
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         conn.commit()
+
+    # Migration: Add default admin if no users exist
+    try:
+        user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+        if user_count == 0:
+            print("Creating default admin user...")
+            hashed_pw = generate_password_hash('admin123')
+            conn.execute('INSERT INTO users (username, password_hash, full_name) VALUES (?, ?, ?)',
+                         ('admin', hashed_pw, 'Administrator'))
+            conn.commit()
+    except sqlite3.OperationalError:
+        pass
     conn.close()
+
+# ============================================================
+# Authentication Middleware
+# ============================================================
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            if auth_header.startswith('Bearer '):
+                token = auth_header.split(" ")[1]
+        
+        if not token:
+            return jsonify({'message': 'Authentication token is missing!'}), 401
+        
+        try:
+            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            current_user_id = data['user_id']
+        except Exception as e:
+            return jsonify({'message': 'Token is invalid or expired!'}), 401
+            
+        return f(*args, **kwargs)
+    
+    return decorated
 
 def get_capacity():
     conn = get_db()
@@ -72,11 +124,44 @@ def get_capacity():
 def admin_page():
     return render_template('admin.html')
 
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Username and password are required'}), 400
+
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    conn.close()
+
+    if user and check_password_hash(user['password_hash'], password):
+        token = jwt.encode({
+            'user_id': user['id'],
+            'username': user['username'],
+            'exp': int(time.time()) + 86400  # 24 hours
+        }, SECRET_KEY, algorithm="HS256")
+        
+        return jsonify({
+            'status': 'success',
+            'token': token,
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'full_name': user['full_name']
+            }
+        })
+
+    return jsonify({'status': 'error', 'message': 'Invalid username or password'}), 401
+
 # ============================================================
 # Vehicle CRUD
 # ============================================================
 
 @app.route('/api/vehicles', methods=['GET'])
+@token_required
 def list_vehicles():
     conn = get_db()
     vehicles = conn.execute('SELECT * FROM vehicles ORDER BY created_at DESC').fetchall()
@@ -84,6 +169,7 @@ def list_vehicles():
     return jsonify([dict(v) for v in vehicles])
 
 @app.route('/api/vehicles', methods=['POST'])
+@token_required
 def register_vehicle():
     data = request.json
     plate = data.get('plate_number', '').replace(' ', '').upper()
@@ -106,6 +192,7 @@ def register_vehicle():
         return jsonify({'status': 'error', 'message': 'Vehicle already registered'}), 400
 
 @app.route('/api/vehicles/<int:vehicle_id>', methods=['PUT'])
+@token_required
 def update_vehicle(vehicle_id):
     data = request.json
     plate = data.get('plate_number', '').replace(' ', '').upper()
@@ -132,6 +219,7 @@ def update_vehicle(vehicle_id):
         return jsonify({'status': 'error', 'message': 'Plate number already exists'}), 400
 
 @app.route('/api/vehicles/<int:vehicle_id>', methods=['DELETE'])
+@token_required
 def delete_vehicle(vehicle_id):
     conn = get_db()
     vehicle = conn.execute('SELECT * FROM vehicles WHERE id = ?', (vehicle_id,)).fetchone()
@@ -146,6 +234,7 @@ def delete_vehicle(vehicle_id):
     return jsonify({'status': 'success', 'message': 'Vehicle deleted'})
 
 @app.route('/api/vehicles/<int:vehicle_id>/toggle', methods=['POST'])
+@token_required
 def toggle_vehicle(vehicle_id):
     conn = get_db()
     vehicle = conn.execute('SELECT * FROM vehicles WHERE id = ?', (vehicle_id,)).fetchone()
@@ -223,6 +312,7 @@ def check_plate():
 # ============================================================
 
 @app.route('/api/logs', methods=['GET'])
+@token_required
 def list_logs():
     conn = get_db()
     logs = conn.execute('SELECT * FROM access_logs ORDER BY timestamp DESC LIMIT 100').fetchall()
@@ -230,6 +320,7 @@ def list_logs():
     return jsonify([dict(l) for l in logs])
 
 @app.route('/api/logs/stats', methods=['GET'])
+@token_required
 def get_log_stats():
     conn = get_db()
     stats = conn.execute('''
@@ -305,6 +396,7 @@ def get_parking_capacity():
     return jsonify(get_capacity())
 
 @app.route('/api/capacity', methods=['PUT'])
+@token_required
 def update_capacity():
     data = request.json
     total = data.get('total_slots')
@@ -331,11 +423,13 @@ def update_capacity():
 # ============================================================
 
 @app.route('/api/gate/open', methods=['POST'])
+@token_required
 def gate_open():
     socketio.emit('gate_command', {'action': 'OPEN'})
     return jsonify({'status': 'success', 'message': 'Gate opened manually'})
 
 @app.route('/api/gate/close', methods=['POST'])
+@token_required
 def gate_close():
     socketio.emit('gate_command', {'action': 'CLOSE'})
     return jsonify({'status': 'success', 'message': 'Gate closed manually'})
