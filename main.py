@@ -3,7 +3,9 @@ import time
 import requests
 import threading
 import config
+import json
 import socketio
+from flask import Flask, Response
 from detection import PlateDetector
 from ocr import PlateOCR
 from serial_comm import SerialComm
@@ -15,6 +17,7 @@ latest_result = {
     'status': None,
     'message': None
 }
+stream_frame = None
 lock = threading.Lock()
 
 def detection_worker(detector, ocr, comm, frame_holder):
@@ -176,6 +179,33 @@ def setup_socket(comm):
         print(f"Warning: Could not connect to Socket server: {e}")
         return None
 
+# ============================================================
+# Video Streaming Server
+# ============================================================
+app = Flask(__name__)
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gen_frames():
+    while True:
+        with lock:
+            if stream_frame is None:
+                time.sleep(0.1)
+                continue
+            ret, buffer = cv2.imencode('.jpg', stream_frame)
+            if not ret:
+                continue
+            frame_bytes = buffer.tobytes()
+        
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.04) # Limit to ~25 FPS
+
+def flask_worker():
+    app.run(host='0.0.0.0', port=config.STREAM_PORT, debug=False, use_reloader=False)
 
 def main():
     detector = PlateDetector(config.MODEL_PATH, config.CONF_THRESHOLD)
@@ -206,6 +236,10 @@ def main():
     worker = threading.Thread(target=detection_worker, args=(detector, ocr, comm, frame_holder), daemon=True)
     worker.start()
 
+    # Start MJPEG stream in background thread
+    stream_thread = threading.Thread(target=flask_worker, daemon=True)
+    stream_thread.start()
+
     print("Starting Smart Parking System...")
     print(f"Buzzer Config: ENABLED={config.BUZZER_ENABLED}, ALLOWED={config.BUZZER_ON_ALLOWED}, DENIED={config.BUZZER_ON_DENIED}")
     print("Press 'q' to quit.")
@@ -235,6 +269,9 @@ def main():
             gate_color = (0, 0, 255) if gate_status == 'ALLOWED' else (0, 255, 0)
             cv2.putText(display_frame, f"Gate: {gate_status or 'SCANNING'}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, gate_color, 2)
+            
+            global stream_frame
+            stream_frame = display_frame.copy()
 
         cv2.imshow("Smart Parking Preview", display_frame)
 

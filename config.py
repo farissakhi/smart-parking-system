@@ -34,6 +34,8 @@ INCREMENT_URL = 'http://localhost:5000/api/occupancy/increment'
 DECREMENT_URL = 'http://localhost:5000/api/occupancy/decrement'
 CONFIRM_URL = 'http://localhost:5000/api/occupancy/confirm-passage'
 STATS_URL = 'http://localhost:5000/api/logs/stats'
+STREAM_PORT = 5001
+STREAM_URL = f"http://localhost:{STREAM_PORT}/video_feed"
 
 # Gate Settings
 AUTO_CLOSE_DELAY = 5.0  # Seconds the gate stays open
