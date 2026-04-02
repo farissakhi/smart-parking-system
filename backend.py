@@ -435,6 +435,38 @@ def gate_close():
     return jsonify({'status': 'success', 'message': 'Gate closed manually'})
 
 # ============================================================
+# Hardware Diagnostics
+# ============================================================
+
+# In-memory store for IoT status (updated by main.py via SocketIO)
+iot_status = {
+    'connected': False,
+    'serial_port': None,
+    'serial_connected': False,
+    'ultrasonic_distance': None,
+    'last_heartbeat': None,
+}
+
+@app.route('/api/hardware/test', methods=['POST'])
+@token_required
+def hardware_test():
+    data = request.json
+    component = data.get('component')
+    
+    valid_components = ['SERVO', 'BUZZER', 'LED_RED', 'LED_GREEN', 'LED_YELLOW', 'ULTRASONIC']
+    if component not in valid_components:
+        return jsonify({'status': 'error', 'message': f'Invalid component. Use: {valid_components}'}), 400
+    
+    # Relay to main.py via SocketIO
+    socketio.emit('hardware_test', {'component': component})
+    return jsonify({'status': 'success', 'message': f'Test command sent for {component}'})
+
+@app.route('/api/hardware/status', methods=['GET'])
+@token_required
+def hardware_status():
+    return jsonify(iot_status)
+
+# ============================================================
 # SocketIO Events
 # ============================================================
 
@@ -442,6 +474,22 @@ def gate_close():
 def handle_connect():
     print('Client connected to dashboard')
     emit('capacity_update', get_capacity())
+
+@socketio.on('iot_heartbeat')
+def handle_iot_heartbeat(data):
+    """Received from main.py to report system health."""
+    iot_status['connected'] = True
+    iot_status['serial_port'] = data.get('serial_port')
+    iot_status['serial_connected'] = data.get('serial_connected', False)
+    iot_status['ultrasonic_distance'] = data.get('ultrasonic_distance')
+    iot_status['last_heartbeat'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # Broadcast to all dashboard clients
+    socketio.emit('iot_status_update', iot_status)
+
+@socketio.on('hardware_result')
+def handle_hardware_result(data):
+    """Received from main.py after a hardware test completes."""
+    socketio.emit('hardware_result', data)
 
 # ============================================================
 # Main

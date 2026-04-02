@@ -164,6 +164,52 @@ def setup_socket(comm):
         elif action == 'CLOSE':
             comm.send_command("CLOSE_GATE", "MANUAL", "denied")
 
+    @sio.on('hardware_test')
+    def on_hardware_test(data):
+        component = data.get('component')
+        print(f"Hardware Test Command: {component}")
+        result = {'component': component, 'success': False, 'message': ''}
+
+        try:
+            if component == 'SERVO':
+                comm.send_command("OPEN_GATE", "TEST", "allowed")
+                time.sleep(3)
+                comm.send_command("CLOSE_GATE", "TEST", "denied")
+                result['success'] = True
+                result['message'] = 'Gate opened and closed successfully'
+
+            elif component == 'BUZZER':
+                comm.send_command("BUZZER_ON")
+                time.sleep(config.BUZZER_BEEP_DURATION)
+                comm.send_command("BUZZER_OFF")
+                result['success'] = True
+                result['message'] = f'Buzzer beeped for {config.BUZZER_BEEP_DURATION}s'
+
+            elif component.startswith('LED_'):
+                color = component.replace('LED_', '').lower()
+                comm.send_command(f"LED_{color.upper()}_ON")
+                time.sleep(3)
+                comm.send_command(f"LED_{color.upper()}_OFF")
+                result['success'] = True
+                result['message'] = f'{color.capitalize()} LED toggled for 3s'
+
+            elif component == 'ULTRASONIC':
+                comm.update_incoming()
+                dist = comm.last_distance_cm
+                present = comm.is_object_present()
+                result['success'] = dist is not None
+                result['message'] = f'Distance: {dist:.1f}cm, Object: {present}' if dist else 'No sensor data'
+                result['distance'] = dist
+                result['object_present'] = present
+
+            else:
+                result['message'] = f'Unknown component: {component}'
+
+        except Exception as e:
+            result['message'] = f'Error: {str(e)}'
+
+        sio.emit('hardware_result', result)
+
     @sio.event
     def connect():
         print("Connected to Backend Socket Server")
@@ -239,6 +285,22 @@ def main():
     # Start MJPEG stream in background thread
     stream_thread = threading.Thread(target=flask_worker, daemon=True)
     stream_thread.start()
+
+    # Start heartbeat thread (reports system health to backend)
+    def heartbeat_worker():
+        while frame_holder['running']:
+            if sio and sio.connected:
+                comm.update_incoming()
+                sio.emit('iot_heartbeat', {
+                    'serial_port': config.SERIAL_PORT,
+                    'serial_connected': comm.ser is not None and comm.ser.is_open,
+                    'ultrasonic_distance': comm.last_distance_cm,
+                    'object_present': comm.is_object_present(),
+                })
+            time.sleep(3)
+
+    hb_thread = threading.Thread(target=heartbeat_worker, daemon=True)
+    hb_thread.start()
 
     print("Starting Smart Parking System...")
     print(f"Buzzer Config: ENABLED={config.BUZZER_ENABLED}, ALLOWED={config.BUZZER_ON_ALLOWED}, DENIED={config.BUZZER_ON_DENIED}")
