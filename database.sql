@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     plate_number TEXT UNIQUE NOT NULL,
     vehicle_type TEXT DEFAULT 'Car',
     is_active INTEGER DEFAULT 1, -- 1: Aktif, 0: Diblokir
+    is_inside INTEGER DEFAULT 0, -- 0: Outside, 1: Inside parking
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

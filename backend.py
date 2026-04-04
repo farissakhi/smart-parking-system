@@ -54,6 +54,16 @@ def init_db():
         conn.close()
         print("Database initialized successfully.")
 
+    # Migration: Add is_inside to vehicles if missing
+    conn = get_db()
+    try:
+        conn.execute('SELECT is_inside FROM vehicles LIMIT 1')
+    except sqlite3.OperationalError:
+        print("Migrating: Adding is_inside column to vehicles...")
+        conn.execute('ALTER TABLE vehicles ADD COLUMN is_inside INTEGER DEFAULT 0')
+        conn.commit()
+    conn.close()
+
     # Migration: Add users table if missing
     conn = get_db()
     try:
