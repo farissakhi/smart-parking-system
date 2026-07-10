@@ -1,135 +1,213 @@
-# Smart Parking System 🚗
+# Project Preview
 
-Sistem manajemen parkir otomatis yang menggunakan teknologi **Optical Character Recognition (OCR)** dan **Computer Vision** untuk mendeteksi nomor kendaraan dan mengontrol akses pintu masuk parkir secara otomatis.
-
-## 📋 Daftar Isi
-- [Fitur Utama](#fitur-utama)
-- [Teknologi yang Digunakan](#teknologi-yang-digunakan)
-- [Prasyarat Instalasi](#prasyarat-instalasi)
-- [Instalasi](#instalasi)
-- [Struktur Proyek](#struktur-proyek)
-- [Konfigurasi](#konfigurasi)
-- [Cara Penggunaan](#cara-penggunaan)
-- [Penjelasan Backend](#penjelasan-backend)
-- [Dokumentasi API](#dokumentasi-api)
+<p align="center">
+  <img src="assets/cover.png" width="900">
+</p>
 
 ---
 
-## ✨ Fitur Utama
+# Overview
 
-1. **Deteksi Plat Nomor Real-time**
-   - Menggunakan model ONNX untuk deteksi plat kendaraan
-   - Pemrosesan video real-time dari kamera
-   - Akurasi tinggi dengan confidence threshold yang dapat dikonfigurasi
+The Smart Parking System is an Edge AI-powered parking management solution that integrates Computer Vision, Optical Character Recognition (OCR), Internet of Things (IoT), and embedded systems to automate vehicle identification, gate control, and real-time parking monitoring.
 
-2. **Optical Character Recognition (OCR)**
-   - Ekstraksi teks dari plat nomor yang terdeteksi
-   - Menggunakan EasyOCR untuk akurasi maksimal
-   - Validasi minimal 5 karakter untuk hasil yang valid
+Unlike conventional cloud-based systems, this project performs license plate recognition locally using YOLO-based object detection and OCR, reducing latency while improving system responsiveness. The recognized license plate is validated against registered vehicles before controlling an ESP32-based automated parking gate.
 
-3. **Sistem Kontrol Pintu Otomatis**
-   - Komunikasi serial dengan Arduino/microcontroller
-   - Perintah OPEN_GATE untuk akses yang diizinkan
-   - Perintah DENY_GATE untuk akses yang ditolak
-   - Auto-close gate setelah delay yang dapat dikonfigurasi
-
-4. **Backend API**
-   - Endpoint untuk verifikasi nomor plat
-   - Integrasi database untuk check status kendaraan
-   - Response status (ALLOWED/DENIED) dengan pesan
-
-5. **Threading & Multithreading**
-   - Background thread untuk deteksi tanpa blocking kamera
-   - Shared state management dengan thread-safe locks
-   - Real-time display dengan overlay visual
-
-6. **WebSocket Support**
-   - Live streaming data detection
-   - CORS-enabled API
-   - Komunikasi dua arah dengan client
+The system also includes a real-time web dashboard built with Flask-SocketIO, enabling administrators to monitor parking occupancy, vehicle logs, hardware status, and gate operations from a centralized interface.
 
 ---
 
-## 🛠 Teknologi yang Digunakan
+# Features
 
-### Backend & Processing
-- **Python 3.7+** - Bahasa pemrograman utama
-- **Flask** - Web framework untuk API
-- **Flask-CORS** - Cross-Origin Resource Sharing
-- **Flask-SocketIO** - WebSocket real-time communication
-- **OpenCV (cv2)** - Computer vision dan image processing
-- **EasyOCR** - Optical Character Recognition
-- **ONNX Runtime** - Model inference untuk deteksi plat
-
-### Hardware Communication
-- **PySerial** - Komunikasi serial dengan Arduino/microcontroller
-- **numpy** - Numerical computing untuk image processing
-
-### Struktur Database
-- **SQLite/MySQL** - Untuk penyimpanan data plat nomor yang terdaftar
-- **SQL queries** - Query management untuk verifikasi
+- Real-time license plate detection
+- License plate recognition using YOLO and OCR
+- Edge AI local inference
+- ESP32-based automated gate control
+- Ultrasonic safety sensor
+- Vehicle registration and access logging
+- Real-time parking occupancy monitoring
+- Hardware diagnostics
+- Manual gate control
+- Web dashboard using Flask-SocketIO
 
 ---
 
-## 📦 Prasyarat Instalasi
+# Dashboard
 
-Sebelum memulai, pastikan Anda memiliki:
+<p align="center">
+  <img src="assets/dashboard-gallery.png" width="900">
+</p>
 
-### Hardware Requirements
-- **Webcam/IP Camera** - Untuk capture video
-- **Arduino/Microcontroller** - Untuk kontrol motor pintu (opsional)
-- **PC/Laptop/Raspberry Pi** - Dengan processor yang cukup powerful
-
-### Software Requirements
-- **Python 3.7 atau lebih tinggi**
-- **pip** - Python package manager
-- **OpenCV library**
-- **CUDA 11.0+** (opsional, untuk GPU acceleration)
-
-### System Requirements
-- **RAM minimal**: 4GB (8GB direkomendasikan)
-- **Storage**: 2GB untuk model dan dependencies
--   **RAM minimal**: 4GB (8GB direkomendasikan)
--   **Storage**: 2GB untuk model dan dependencies
--   **Internet connection**: Untuk download library
+The dashboard provides real-time monitoring of parking occupancy, vehicle registration, access logs, hardware diagnostics, and manual gate control.
 
 ---
 
-## ⚙️ Instalasi
+# License Plate Detection
 
-### 1. Clone Repository
+<p align="center">
+  <img src="assets/license-plate-detection.png" width="700">
+</p>
+
+The system detects Indonesian license plates in real time using a YOLO-based object detection model.
+
+---
+
+# Optical Character Recognition
+
+<p align="center">
+  <img src="assets/ocr-result.png" width="700">
+</p>
+
+After the license plate is detected, a YOLO-based OCR model recognizes each character and reconstructs the complete license plate number.
+
+---
+
+# System Architecture
+
+<p align="center">
+  <img src="assets/system-architecture.png" width="900">
+</p>
+
+The system integrates three major subsystems:
+
+- Computer Vision Module
+- Embedded Hardware Controller (ESP32)
+- Web-Based Monitoring Dashboard
+
+### Workflow
+
+```text
+Vehicle Arrival
+        │
+        ▼
+ Ultrasonic Sensor
+        │
+        ▼
+ Camera Capture
+        │
+        ▼
+ YOLO License Plate Detection
+        │
+        ▼
+ OCR Character Recognition
+        │
+        ▼
+ Vehicle Validation
+        │
+        ▼
+ ESP32 Controller
+        │
+        ▼
+ Servo Motor Gate
+        │
+        ▼
+ Dashboard & Database
+```
+
+---
+
+# Hardware Wiring
+
+<p align="center">
+  <img src="assets/wiring-diagram.png" width="900">
+</p>
+
+The wiring diagram illustrates the connection between the ESP32, ultrasonic sensor, servo motor, camera, LEDs, buzzer, and LCD display.
+
+---
+
+# Model Performance
+
+| Task | Model | Result |
+|------|-------|--------|
+| License Plate Detection | YOLOv8s | mAP50 = **0.981** |
+| License Plate Detection | YOLOv11n | mAP50 = **0.983** |
+| OCR | YOLOv8n | mAP50 = **0.956** |
+| OCR | YOLOv11n | mAP50 = **0.949** |
+
+---
+
+# Technology Stack
+
+| Category | Technologies |
+|----------|--------------|
+| Programming | Python, JavaScript |
+| AI | YOLOv8, OCR |
+| Computer Vision | OpenCV |
+| Backend | Flask, Flask-SocketIO |
+| Embedded System | ESP32 |
+| Communication | Serial Communication |
+| Frontend | HTML, CSS, JavaScript |
+| Database | SQLite |
+
+---
+
+# Demo
+
+Click the image below to watch the complete prototype demonstration.
+
+<p align="center">
+  <a href="YOUR_VIDEO_LINK">
+    <img src="assets/demo-thumbnail.png" width="700">
+  </a>
+</p>
+
+---
+
+# Installation
+
+Clone the repository
+
 ```bash
-git clone https://github.com/farissakhi/smart-parking-system.git
+git clone https://github.com/tintinbunyispeda/smart-parking-system.git
+```
+
+Navigate to the project directory
+
+```bash
 cd smart-parking-system
 ```
 
-### 2. Create Virtual Environment
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+Install dependencies
 
-### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Additional Dependencies (Tesseract OCR)
-Pastikan **Tesseract OCR** terinstall di sistem Anda untuk pembacaan teks plat nomor.
-- Download: [Tesseract OCR for Windows](https://github.com/UB-Mannheim/tesseract/wiki)
+Run the application
+
+```bash
+python app.py
+```
 
 ---
 
-## ⚠️ PENTING: Untuk Kolaborator (Frontend)
+# Future Improvements
 
-Jika Anda mengerjakan bagian Frontend tanpa memegang hardware (ESP32), jangan khawatir:
-
-1.  **Tanpa ESP32**: Backend tetap bisa dijalankan. Abaikan peringatan `WARNING: Could not connect to ESP32`. Pintu gerbang akan disimulasikan lewat log terminal.
-2.  **Model AI**: Kamu butuh file `plate_model.onnx` di folder `models/`. Karena file ini >100MB, file ini tidak ada di GitHub. Silakan minta filenya ke owner.
-3.  **Database**: Jalankan `database.sql` untuk inisialisasi tabel di SQLite.
+- Multi-camera support
+- Cloud database synchronization
+- Mobile application
+- AI-based parking occupancy prediction
+- RFID integration
+- Notification system
 
 ---
 
-## 📖 Dokumentasi Detail
-Untuk penjelasan lebih mendalam tentang struktur kode dan cara kerja backend, silakan baca:
-👉 **[Documentation Guide (docs/README.md)](docs/README.md)**
+# Contributors
+
+- Cristine Valentina
+- Muhammad Faris Sakhi Ashari
+- Reyner Orlando Winata
+- Pascal Ahmad Zen
+- Yozabel Hamuda
+
+---
+
+# Author
+
+**Cristine Valentina**
+
+Bachelor of Informatics, President University
+
+- LinkedIn: https://linkedin.com/in/cristine-valentina
+- Portfolio: https://cristinevalentina-portofolio-one.vercel.app
+- GitHub: https://github.com/tintinbunyispeda
